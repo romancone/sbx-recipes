@@ -1,0 +1,50 @@
+name: publish
+
+# A tag <recipe>-<vendor>-v<N> publishes that recipe on that vendor's base. Recipe names carry no hyphen.
+on:
+  push:
+    tags: ['*-*-v*']
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve the tag
+        id: tag
+        run: |
+          name="${GITHUB_REF_NAME%-v*}"
+          recipe="${name%%-*}"
+          vendor="${name#*-}"
+          base="$(sed -n "s|^${vendor}=||p" vendors)"
+          [[ -f "${recipe}/Dockerfile" ]] || { echo "no recipe '${recipe}'"; exit 1; }
+          [[ -n "${base}" ]] || { echo "no vendor '${vendor}' in vendors"; exit 1; }
+          {
+            echo "name=${name}"
+            echo "recipe=${recipe}"
+            echo "args<<EOF"
+            echo "BASE=${base}"
+            cat "${recipe}/versions"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ steps.tag.outputs.recipe }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: ${{ steps.tag.outputs.args }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/sbx:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/sbx:${{ steps.tag.outputs.name }}
