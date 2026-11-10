@@ -33,6 +33,7 @@ RUN set -e; \
 FROM ${BASE}
 USER root
 COPY --from=tools /out/ /usr/local/bin/
+ENV GOTOOLCHAIN=local
 # The agent's non-interactive shells read this file, not .bashrc.
-RUN printf '%s\n' 'export GOTOOLCHAIN=local' 'export PATH="$HOME/go/bin:$PATH"' >> /etc/sandbox-persistent.sh
+RUN printf '%s\n' 'export PATH="$HOME/go/bin:$PATH"' >> /etc/sandbox-persistent.sh
 USER agent
